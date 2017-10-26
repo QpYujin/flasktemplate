@@ -1,2 +1,2 @@
 Flask==0.10.1
-pymongo
+prometheus_client==0.0.21
