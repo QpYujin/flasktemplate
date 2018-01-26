@@ -6,7 +6,14 @@ from prometheus_client import CollectorRegistry, Gauge, push_to_gateway, start_h
 import psutil
 import resource,time,json
 
+
+
 app = FlaskAPI(__name__)
+prome = 'http://pushgateway.deploybytes.com'
+
+print(prome)
+
+
 
 # Promethesus
 registry = CollectorRegistry()
@@ -79,18 +86,18 @@ def getMetrics():
     app.after_request(after_request)
 
 # MySQL connection
-app.config['MYSQL_HOST'] = '*******************'
-app.config['MYSQL_USER'] = '**********'
-app.config['MYSQL_PASSWORD'] = '*********'
-app.config['MYSQL_DB'] = '*******'
+app.config['MYSQL_HOST'] = '************'
+app.config['MYSQL_USER'] = 'root'
+app.config['MYSQL_PASSWORD'] = '*******'
+app.config['MYSQL_DB'] = 'QPAIR'
 mysql = MySQL(app)
 
 
 
 notes = {
-    0: 'do the shopping',
-    1: 'build the codez',
-    2: 'paint the door',
+   0: 'Test Flask app0',
+    1: 'Test Flask app1',
+    2: 'Test Flask app2',
 }
 
 def note_repr(key):
@@ -102,6 +109,8 @@ def note_repr(key):
 
 @app.route("/", methods=['GET', 'POST'])
 def notes_list():
+    
+    
     """
     List or create notes.
     """
@@ -116,8 +125,8 @@ def notes_list():
         rm = rm_tuple[0]
         testrunid = str(rm)
         getMetrics()
-        push_to_gateway('*************************', job=testrunid, registry=registry)
-        return note_repr(idx), status.HTTP_201_CREATED
+        push_to_gateway(prome, job=testrunid, registry=registry)
+        return "successful"
 
     elif request.method == 'GET':
         mysql_connection = mysql.connection.cursor()
@@ -127,12 +136,14 @@ def notes_list():
         rm = rm_tuple[0]
         testrunid = str(rm)
         getMetrics()
-        push_to_gateway('************************', job=testrunid, registry=registry)
+        push_to_gateway(prome, job=testrunid, registry=registry)
         return [note_repr(idx) for idx in sorted(notes.keys())]
 
 
-@app.route("/<int:key>/", methods=['GET', 'PUT', 'DELETE'])
+@app.route("/<int:key>", methods=['PUT', 'DELETE'])
 def notes_detail(key):
+    
+
     """
     Retrieve, update or delete note instances.
     """
@@ -146,7 +157,7 @@ def notes_detail(key):
         rm = rm_tuple[0]
         testrunid = str(rm)
         getMetrics()
-        push_to_gateway('*******************', job=testrunid, registry=registry)
+        push_to_gateway(prome, job=testrunid, registry=registry)
         return note_repr(key)
 
     elif request.method == 'DELETE':
@@ -158,25 +169,11 @@ def notes_detail(key):
         rm = rm_tuple[0]
         testrunid = str(rm)
         getMetrics()
-        push_to_gateway('*******************', job=testrunid, registry=registry)
-        return '', status.HTTP_204_NO_CONTENT
+        push_to_gateway(prome, job=testrunid, registry=registry)
+        return 'Deleted successfully'
 
-    # request.method == 'GET'
-    if key not in notes:
-        mysql_connection = mysql.connection.cursor()
-        mysql_connection.execute('''SELECT testRunId FROM testresultparent ORDER BY updatedAt DESC LIMIT 1;''')
-        testrunid_data = mysql_connection.fetchall()
-        rm_tuple = testrunid_data[0]
-        rm = rm_tuple[0]
-        testrunid = str(rm)
-        getMetrics()
-        push_to_gateway('**************', job=testrunid, registry=registry)
-        raise exceptions.NotFound()
-    return note_repr(key)
-
-
+    
 if __name__ == "__main__":
     start_http_server(8000)
     app.before_request(before_request)
     app.run(host='0.0.0.0', port=5000)
-  
