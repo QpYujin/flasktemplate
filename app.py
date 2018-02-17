@@ -1,10 +1,21 @@
+from flask import request, url_for
+from flask_api import FlaskAPI, status, exceptions
 from flask import Flask, request
+from flask_mysqldb import MySQL
 from prometheus_client import CollectorRegistry, Gauge, push_to_gateway, start_http_server, Summary, Counter, Histogram
 import psutil
 import resource,time,json
 
 
-app = Flask(__name__)
+
+app = FlaskAPI(__name__)
+prome = 'http://pushgateway.deploybytes.com'
+
+print(prome)
+
+
+
+# Promethesus
 registry = CollectorRegistry()
 
 
@@ -18,10 +29,7 @@ def before_request():
 def after_request(response):
     request_latency = time.time() - request.start_time
     FLASK_REQUEST_LATENCY.labels(request.method, request.path).observe(request_latency)
-
-
     return response
-
 
 memory_usage = Gauge('mem_usage','memory_usage',registry=registry)
 cpu_percent = Gauge('cpu_percent','CPU_PERCENT',registry=registry)
@@ -38,22 +46,14 @@ disk_readbytes = Gauge('disk_readbytes','DISK_READBYTES', registry=registry)
 disk_writebytes = Gauge('disk_writebyte','DISK_WRITEBYTES', registry=registry)
 
 
-
-@app.route('/<string:jobname>/<string:pushgateway>')
-def getDetails(jobname,pushgateway):
-    testrunid = str(jobname)
-    pushgateway_id = str(pushgateway)
-
+def getMetrics():
     # Server side metrics monitoring
     # CPU Percentage
     cpu_percentage = int(psutil.cpu_percent())
     cpu_percent.set(cpu_percentage)
-    print cpu_percentage
-
     # Memory Usage
     mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     memory_usage.set(mem_usage)
-
     # Network IN and OUT
     network_data = psutil.net_io_counters(pernic=True)
     network_list = list(network_data.values())
@@ -62,20 +62,16 @@ def getDetails(jobname,pushgateway):
     byte_recv = list(bytes_data)[1]
     packet_sent = list(bytes_data)[2]
     packet_recv = list(bytes_data)[3]
-
     bytes_sent.set(byte_sent)
     bytes_recv.set(byte_recv)
     packets_sent.set(packet_sent)
     packets_recv.set(packet_recv)
-
-
     # disk status in bytes
     disk = psutil.disk_usage('/')
     disk_used = list(disk)[1]
     disk_avail = list(disk)[2]
     disk_usage.set(disk_used)
     disk_free.set(disk_avail)
-
     # disk counter
     disk_count = psutil.disk_io_counters(perdisk=False)
     read_count = list(disk_count)[0]
@@ -86,17 +82,98 @@ def getDetails(jobname,pushgateway):
     disk_readbytes.set(read_bytes)
     write_bytes = list(disk_count)[3]
     disk_writebytes.set(write_bytes)
-
     #Application
-    print pushgateway_id
     app.after_request(after_request)
 
-    push_to_gateway(pushgateway_id, job=testrunid, registry=registry)
+# MySQL connection
+app.config['MYSQL_HOST'] = 'qpairboto.cnryqwkkelel.us-east-1.rds.amazonaws.com'
+app.config['MYSQL_USER'] = 'root'
+app.config['MYSQL_PASSWORD'] = 'Qpair@2013'
+app.config['MYSQL_DB'] = 'QPAIR'
+mysql = MySQL(app)
 
-    return "result"
 
-if __name__ == '__main__':
+
+notes = {
+   0: 'Test Flask app0',
+    1: 'Test Flask app1',
+    2: 'Test Flask app2',
+}
+
+def note_repr(key):
+    return {
+        'url': request.host_url.rstrip('/') + url_for('notes_detail', key=key),
+        'text': notes[key]
+    }
+
+
+@app.route("/", methods=['GET', 'POST'])
+def notes_list():
+    
+    
+    """
+    List or create notes.
+    """
+    if request.method == 'POST':
+        note = str(request.data.get('text', ''))
+        idx = max(notes.keys()) + 1
+        notes[idx] = note
+        mysql_connection = mysql.connection.cursor()
+        mysql_connection.execute('''SELECT testRunId FROM testresultparent ORDER BY updatedAt DESC LIMIT 1;''')
+        testrunid_data = mysql_connection.fetchall()
+        rm_tuple = testrunid_data[0]
+        rm = rm_tuple[0]
+        testrunid = str(rm)
+        getMetrics()
+        push_to_gateway(prome, job=testrunid, registry=registry)
+        return "successful"
+
+    elif request.method == 'GET':
+        mysql_connection = mysql.connection.cursor()
+        mysql_connection.execute('''SELECT testRunId FROM testresultparent ORDER BY updatedAt DESC LIMIT 1;''')
+        testrunid_data = mysql_connection.fetchall()
+        rm_tuple = testrunid_data[0]
+        rm = rm_tuple[0]
+        testrunid = str(rm)
+        getMetrics()
+        push_to_gateway(prome, job=testrunid, registry=registry)
+        return [note_repr(idx) for idx in sorted(notes.keys())]
+
+
+@app.route("/<int:key>", methods=['PUT', 'DELETE'])
+def notes_detail(key):
+    
+
+    """
+    Retrieve, update or delete note instances.
+    """
+    if request.method == 'PUT':
+        note = str(request.data.get('text', ''))
+        notes[key] = note
+        mysql_connection = mysql.connection.cursor()
+        mysql_connection.execute('''SELECT testRunId FROM testresultparent ORDER BY updatedAt DESC LIMIT 1;''')
+        testrunid_data = mysql_connection.fetchall()
+        rm_tuple = testrunid_data[0]
+        rm = rm_tuple[0]
+        testrunid = str(rm)
+        getMetrics()
+        push_to_gateway(prome, job=testrunid, registry=registry)
+        return note_repr(key)
+
+    elif request.method == 'DELETE':
+        notes.pop(key, None)
+        mysql_connection = mysql.connection.cursor()
+        mysql_connection.execute('''SELECT testRunId FROM testresultparent ORDER BY updatedAt DESC LIMIT 1;''')
+        testrunid_data = mysql_connection.fetchall()
+        rm_tuple = testrunid_data[0]
+        rm = rm_tuple[0]
+        testrunid = str(rm)
+        getMetrics()
+        push_to_gateway(prome, job=testrunid, registry=registry)
+        return 'Deleted successfully'
+
+    
+if __name__ == "__main__":
     start_http_server(8000)
     app.before_request(before_request)
-    app.run(host='0.0.0.0', port=5000 )
-  
+    app.run(host='0.0.0.0', port=5000)
