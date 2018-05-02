@@ -1,1 +1,81 @@
 
+apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: flask
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: metrics
+    namespace: flask
+    labels: 
+      app: flask
+      role: web
+  spec:
+    type: LoadBalancer
+    ports:
+    - name: metrics
+      port: 80
+      targetPort: metrics
+      protocol: TCP
+    selector:
+      app: flask
+      role: web
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: flask
+    namespace: flask
+    labels:
+      app: flask2
+      role: web
+    annotations:
+      external-dns.alpha.kubernetes.io/hostname: flask.deploybytes.com.
+      externaldns: flask.deploybytes.com
+  spec:
+    type: LoadBalancer
+    ports:
+    - name: web
+      port: 80
+      targetPort: web
+      protocol: TCP
+    selector:
+      app: flask
+      role: web
+- apiVersion: extensions/v1beta1
+  kind: Deployment
+  metadata:
+    name: flask
+    namespace: flask
+  spec:
+    replicas: 1
+    strategy:
+      type: RollingUpdate
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app: flask
+        role: web
+    template:
+      metadata:
+        labels:
+          app: flask
+          role: web
+        annotations:
+          consul.register/enabled: "true"
+          consul.register/service.name: "flask"
+      spec:
+        containers:
+        - name: flask
+          image: qpair/flaskapp:1.1
+          imagePullPolicy: Always
+          ports:
+          - name: web
+            containerPort: 5000
+          - name: metrics
+            containerPort: 8000
+        #imagePullSecrets:
+        #        #- name: myregistrykey
