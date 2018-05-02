@@ -10,6 +10,8 @@ RUN pip install flask-api
 
 RUN pip install psutil
 
+RUN pip install Flask-MySQLdb
+
 WORKDIR /home/ubuntu/flaskserver
 
 COPY . /home/ubuntu/flaskserver
