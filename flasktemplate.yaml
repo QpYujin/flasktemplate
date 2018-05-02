@@ -70,7 +70,7 @@ items:
       spec:
         containers:
         - name: flask
-          image: qpair/flaskapp:1.1
+          image: qpair/flaskapp:1.0.0
           imagePullPolicy: Always
           ports:
           - name: web
