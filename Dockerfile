@@ -4,7 +4,7 @@ MAINTAINER Mallikarjun
 
 RUN apt-get update -y
 
-RUN apt-get install -y python-pip python-dev build-essential
+RUN apt-get install -y python-pip python-dev build-essential libmysqlclient-dev
 
 RUN pip install flask-api
 
